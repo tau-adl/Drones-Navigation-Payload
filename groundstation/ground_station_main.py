@@ -22,6 +22,7 @@ def main():
 
     try:
         os.mkdir(path)
+
     except OSError:
         print ("trying to create outputs directory")
         try:
@@ -32,7 +33,7 @@ def main():
             print ("error creating dir")
     else:
         print ("created  directory %s " % path)
-
+        csvmngr = CsvMngr(path)
     # this section is tested on WIN10
     try:
         cmd = "netsh wlan connect name={0} ssid={0}".format(c.SSID)
@@ -50,7 +51,7 @@ def main():
         print("could not connect AP: ")
 
     pm = PacketMngr(c.HOST, c.PORT)
-
+    pm.csvmngr = csvmngr
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         pm.add_socket(s)
         pm.socket.connect((pm.host, pm.port))
@@ -146,6 +147,7 @@ class PacketMngr:
         self.err_ctr = 0.0
         self.total_bytes_rec = 0.0
 
+        self.csvmngr = None
         self.gyro_x = 0
         self.gyro_y = 0
         self.gyro_z = 0
@@ -253,7 +255,7 @@ class PacketMngr:
             self.acc_x = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_X_SHIFT) / c.ACC_BITS_TO_FLOAT
             self.acc_y = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_Y_SHIFT) / c.ACC_BITS_TO_FLOAT
             self.acc_z = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_Z_SHIFT) / c.ACC_BITS_TO_FLOAT
-
+            self.csvmngr.appendImuData([self.imu_sys_tick-c.IMU_CALLS_TIME_Delta_MSEC*(c.IMU_CALLS_PER_PACKET-1-imu_call_idx),self.gyro_x,self.gyro_y,self.gyro_z,self.acc_x,self.acc_y,self.acc_z])
     def print_imu_data(self):
         prnt(("Gyro X = " + str(self.gyro_x)), 0)
         prnt(("Gyro Y = " + str(self.gyro_y)), 0)
@@ -284,12 +286,13 @@ class CsvMngr:
     def __init__(self, a_path):
         self.path = a_path
         self.list = []
-        with open(self.path + '/config.csv', newline='') as csvfile:
-            reader = csv.DictReader(csvfile, delimiter=',', quotechar='|')
-            for row in reader:
-                self.list.append(row)
-
-
+        with open(self.path + '/imu.csv','w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["TimeStamp","GyroX", "GyroY", "GyroZ","AccX", "AccY", "AccZ"])
+    def appendImuData(self,a_list):
+        with open(self.path + '/imu.csv','a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(a_list)
 if __name__ == "__main__":
     main()
 

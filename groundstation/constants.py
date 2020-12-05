@@ -29,6 +29,8 @@ ACC_X_SHIFT                 =   6
 ACC_Y_SHIFT                 =   8
 ACC_Z_SHIFT                 =   10
 ACC_BITS_TO_FLOAT           = 16384.0
+IMU_CALLS_TIME_Delta_MSEC   = 6
+
 IMG_H_TOP_CROP              = 64
 IMG_H_BOTTOM_CROP           = 16
 IMG_H_MARGIN                = 32

@@ -9,3 +9,4 @@ groundstation/.idea/vcs.xml
 groundstation/.idea/workspace.xml
 *.jpeg
 *.pyc
+*.csv
