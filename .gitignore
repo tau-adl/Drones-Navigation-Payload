@@ -2,3 +2,10 @@
 /drone-payload-fw/Debug
 /drone-payload-fw/desktop.ini
 /groundstation/*.pyc
+groundstation/.idea/groundstation.iml
+groundstation/.idea/misc.xml
+groundstation/.idea/modules.xml
+groundstation/.idea/vcs.xml
+groundstation/.idea/workspace.xml
+*.jpeg
+*.pyc

@@ -4,56 +4,13 @@ from datetime import datetime
 import os
 import subprocess
 import time
+import csv
+from utils import *
 import cv2
 import threading
+import constants as c
 import matplotlib.pyplot as plt
 
-
-GLOBAL_VERBOSITY            =   0
-
-MAIN_WIFI_M2M_BUFFER_SIZE   =   1024
-FRAME_DATA_SIZE_B           =   1017
-FRAME_HEADER_WO_SOF_SIZE_B  =   6
-FRAME_HEADER_SIZE_B         =   7
-IMU_PACkET_SIZE_B           =   125
-SOF_SIZE_B                  =   1
-IMU_PACKET_SIZE_WO_HEADER   =   (IMU_PACkET_SIZE_B - SOF_SIZE_B)
-
-HOST = '192.168.1.1'  # Standard loopback interface address (localhost)
-PORT = 6666  # Port to listen on (non-privileged ports are > 1023)
-FRAME_SOF                   =	33 # '!'
-IMU_SOF			            =   105# 'i'
-
-IMU_SYSTICK_SHIFT_MSEC      =   50
-IMU_CALLS_PER_PACKET        =   10
-IMU_SOF_SIZE_B              =   1
-SYSTICK_SIZE_B              =   4
-IMU_DATA_SHIFT_SIZE_B       =   SYSTICK_SIZE_B
-IMU_PARAMETER_SIZE_B        =   2
-IMU_PARAMETERS_PER_CALL     =   6
-IMU_CALL_SIZE_B             =   (IMU_PARAMETER_SIZE_B * IMU_PARAMETERS_PER_CALL)
-GYRO_X_SHIFT                =   0
-GYRO_Y_SHIFT                =   2
-GYRO_Z_SHIFT                =   4
-ACC_X_SHIFT                 =   6
-ACC_Y_SHIFT                 =   8
-ACC_Z_SHIFT                 =   10
-
-IMG_H_TOP_CROP              = 64
-IMG_H_BOTTOM_CROP           = 16
-IMG_H_MARGIN                = 32
-IMG_H                       = (240 + IMG_H_MARGIN)
-IMG_W                       = 320
-
-IMG_PLOT_PAUSE              = .001
-
-TARGET_START_SEND_CMD       = b'Start\r\n'
-
-SSID = 'WINC1500_AP'
-
-ERR_IMG_PATH = r"err_img.jpg"
-
-IS_DISP_ERR_IMG = False
 
 
 def main():
@@ -76,75 +33,60 @@ def main():
     else:
         print ("created  directory %s " % path)
 
-    # this section is tested with WIN10
+    # this section is tested on WIN10
     try:
-        cmd = "netsh wlan connect name={0} ssid={0}".format(SSID)
+        cmd = "netsh wlan connect name={0} ssid={0}".format(c.SSID)
         k = subprocess.run(cmd, capture_output=True, text=True).stdout
         # print("connection succeed: " + k)
         time.sleep(2)
         cmd = "netsh wlan show interfaces"
         k = subprocess.run(cmd, capture_output=True, text=True).stdout
-        connection_result = k.find(SSID)
+        connection_result = k.find(c.SSID)
         if connection_result > 0:
             print("connected")
         else:
             print("NOT connected")
     except:
-        print("could not connect AP: " + k)
+        print("could not connect AP: ")
 
-    pm = PacketMngr(HOST, PORT)
+    pm = PacketMngr(c.HOST, c.PORT)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         pm.add_socket(s)
         pm.socket.connect((pm.host, pm.port))
 
-        # print("Are you ready to start? y/n\r\n")
-        # user_intput = input()
-        #
-        # if( user_intput == 'y'):
-        s.sendall(TARGET_START_SEND_CMD)
+        s.sendall(c.TARGET_START_SEND_CMD)
 
         display_img_thread = threading.Thread(target=pm.display_img)
         display_img_thread.setDaemon(True)
         display_img_thread.start()
 
-        # display_imu_thread = threading.Thread(target=pm.display_imu)
-        # display_imu_thread.setDaemon(True)
-        # display_imu_thread.start()
-
-        acc_x_values = []
-        acc_y_values = []
-        acc_z_values = []
-        #
-        # imu_plt = plt.plot(0, acc_x_values)
-        # plt.show()
-
         while True:
-            incoming_data = s.recv(SOF_SIZE_B)
+            incoming_data = s.recv(c.SOF_SIZE_B)
             print("SOF="+str(incoming_data))
-            if incoming_data[0] == FRAME_SOF:
-                incoming_data = s.recv(FRAME_HEADER_WO_SOF_SIZE_B)
+            if incoming_data[0] == c.FRAME_SOF:
+                incoming_data = s.recv(c.FRAME_HEADER_WO_SOF_SIZE_B)
                 incoming_sys_tick = FourBytesToUint32(incoming_data, 0)
                 # print("tick=" + str(incoming_sys_tick))
                 if pm.frame_sys_tick == 0 or pm.frame_sys_tick == incoming_sys_tick:
                     pm.frame_sys_tick = incoming_sys_tick
                 else:
-                    print("invalid systick arrived")# TODO: see if it handles missing property
+                    print("invalid systick arrived")
                     pm.clear_frame_properties()
                     continue
                 pm.frame_size = TwoBytesToUint16(incoming_data, 4)
                 print("tick = %d \tframe_size = %d" % (pm.frame_sys_tick, pm.frame_size))
-                if pm.frame_size > FRAME_DATA_SIZE_B:  # means that there will be an additional packet
+                if pm.frame_size > c.FRAME_DATA_SIZE_B:  # means that there will be an additional packet
                     if pm.frame_rx_buff == bytes(0):
-                        pm.frame_rx_buff = s.recv(FRAME_DATA_SIZE_B)
+                        pm.frame_rx_buff = s.recv(c.FRAME_DATA_SIZE_B)
                     else:
-                        pm.frame_rx_buff = pm.frame_rx_buff + s.recv(FRAME_DATA_SIZE_B)
+                        pm.frame_rx_buff = pm.frame_rx_buff + s.recv(c.FRAME_DATA_SIZE_B)
 
                 else: # means this is the last packet
                     try:
                         pm.frame_rx_buff = pm.frame_rx_buff + s.recv(pm.frame_size)# - FRAME_HEADER_SIZE_B)
                     except:
-                        expected_frame_size = pm.frame_size - FRAME_HEADER_SIZE_B
+                        expected_frame_size = pm.frame_size - c.FRAME_HEADER_SIZE_B
                         print("bad recv size: %d" % expected_frame_size)
                     else:
                         print("frame recv size: %d" % len(pm.frame_rx_buff))
@@ -157,9 +99,9 @@ def main():
                     # ===== cleaning:  ======
                     pm.clear_frame_properties()
 
-            elif incoming_data[0] == IMU_SOF:
-                pm.imu_rx_buff = s.recv(IMU_PACKET_SIZE_WO_HEADER)
-                pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - IMU_SYSTICK_SHIFT_MSEC
+            elif incoming_data[0] == c.IMU_SOF:
+                pm.imu_rx_buff = s.recv(c.IMU_PACKET_SIZE_WO_HEADER)
+                pm.imu_sys_tick = FourBytesToUint32(pm.imu_rx_buff, 0) - c.IMU_SYSTICK_SHIFT_MSEC
                 print("X" + str(pm.imu_sys_tick))
                 pm.process_imu_data(pm.imu_rx_buff)
                 # pm.print_imu_data()
@@ -176,32 +118,7 @@ def main():
             input()
             exit(1)
 
-def TwoBytesToUint16 (a_byte_arr, a_shift = 0):
-    return int.from_bytes( a_byte_arr[a_shift:a_shift+2],byteorder='little',signed=False)
 
-
-def FourBytesToUint32 (a_byte_arr, a_shift):
-    return int.from_bytes( a_byte_arr[a_shift:a_shift+4],byteorder='little',signed=False)
-
-def TwoBytesToInt16 (a_byte_arr, a_shift = 0):
-    return int.from_bytes( a_byte_arr[a_shift:a_shift+2],byteorder='little',signed=True)
-
-def FourBytesToInt32 (a_byte_arr, a_shift):
-    return int.from_bytes( a_byte_arr[a_shift:a_shift+4],byteorder='little',signed=True)
-
-def ErrorHandler(a_string = ""):
-    print("Fatal Error:")
-    print(a_string)
-    y = input()
-    exit(1)
-
-def WarningHandler(a_string = ""):
-    print("Warning:")
-    print(a_string)
-
-def prnt(a_string ="", a_verbosity = 10000):
-    if(a_verbosity >= GLOBAL_VERBOSITY):
-        print(a_string)
 
 
 class PacketMngr:
@@ -264,11 +181,11 @@ class PacketMngr:
                         img_plt = plt.imshow(img)
                     else:
                         img_plt.set_data(img)
-                    plt.pause(IMG_PLOT_PAUSE)  # needs to be less then 1/15fps
+                    plt.pause(c.IMG_PLOT_PAUSE)  # needs to be less then 1/15fps
                     plt.draw()
                 except:
-                    if IS_DISP_ERR_IMG:
-                        img = plt.imread(ERR_IMG_PATH)
+                    if c.IS_DISP_ERR_IMG:
+                        img = plt.imread(c.ERR_IMG_PATH)
                         if img_plt is None:
                             img_plt = plt.imshow(img)
                         else:
@@ -296,7 +213,7 @@ class PacketMngr:
     def crop_img(self, img_path):
         try:
             img = cv2.imread(img_path)
-            cropped_img = img[IMG_H_BOTTOM_CROP:IMG_H-IMG_H_TOP_CROP, 0:IMG_W]
+            cropped_img = img[c.IMG_H_BOTTOM_CROP:c.IMG_H-c.IMG_H_TOP_CROP, 0:c.IMG_W]
             self.last_saved_cropped_img_path = self.last_saved_img_path.replace('.jpeg', '_c.jpeg')
             # self.last_saved_img_path = cropped_img_file_name
             cropped_img = cv2.flip(cropped_img, 1)
@@ -329,13 +246,13 @@ class PacketMngr:
     def process_imu_data(self, a_byte_arr):
         self.new_imu_rec = True
 
-        for imu_call_idx in range(IMU_CALLS_PER_PACKET):
-            self.gyro_x = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx*IMU_CALL_SIZE_B + GYRO_X_SHIFT) / 131.0
-            self.gyro_y = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Y_SHIFT) / 131.0
-            self.gyro_z = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + GYRO_Z_SHIFT) / 131.0
-            self.acc_x = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_X_SHIFT) / 16384.0
-            self.acc_y = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Y_SHIFT) / 16384.0
-            self.acc_z = TwoBytesToInt16(a_byte_arr,IMU_DATA_SHIFT_SIZE_B + imu_call_idx * IMU_CALL_SIZE_B + ACC_Z_SHIFT) / 16384.0
+        for imu_call_idx in range(c.IMU_CALLS_PER_PACKET):
+            self.gyro_x = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx*c.IMU_CALL_SIZE_B + c.GYRO_X_SHIFT) / c.GYRO_BITS_TO_FLOAT
+            self.gyro_y = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.GYRO_Y_SHIFT) / c.GYRO_BITS_TO_FLOAT
+            self.gyro_z = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.GYRO_Z_SHIFT) / c.GYRO_BITS_TO_FLOAT
+            self.acc_x = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_X_SHIFT) / c.ACC_BITS_TO_FLOAT
+            self.acc_y = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_Y_SHIFT) / c.ACC_BITS_TO_FLOAT
+            self.acc_z = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_Z_SHIFT) / c.ACC_BITS_TO_FLOAT
 
     def print_imu_data(self):
         prnt(("Gyro X = " + str(self.gyro_x)), 0)
@@ -358,6 +275,21 @@ class PacketMngr:
 
         print("tick = %d \tframe_size = %d, is Err = %s" % (self.frame_sys_tick,len(self.frame_rx_buff), str(is_err)))
         print("BER = %f [percent]" % (100*self.err_ctr/self.total_bytes_rec))
+
+class CsvMngr:
+    '''
+    handles reading and writing from CSV files
+    '''
+
+    def __init__(self, a_path):
+        self.path = a_path
+        self.list = []
+        with open(self.path + '/config.csv', newline='') as csvfile:
+            reader = csv.DictReader(csvfile, delimiter=',', quotechar='|')
+            for row in reader:
+                self.list.append(row)
+
+
 if __name__ == "__main__":
     main()
 
