@@ -95,8 +95,9 @@ def main():
                             pm.first_img_tick = incoming_sys_tick
                         print("frame recv size: %d" % len(pm.frame_rx_buff))
                         pm.save_jpeg(path)
-                        pm.calc_ber()
+                        # pm.calc_ber()
                         pm.frame_rx_buff = bytes()
+
                         delta_tick = pm.frame_sys_tick - pm.last_valid_frame_sys_tick
                         print("sys_tick diff = %d [msec]" % delta_tick)
                         pm.last_valid_frame_sys_tick = pm.frame_sys_tick
@@ -161,6 +162,10 @@ class PacketMngr:
         self.acc_y = 0
         self.acc_z = 0
 
+        self.fps_start_tick = 0
+        self.fps_curr = 0
+        self.fps_last= 0
+
     def add_socket(self, a_socket):
         self.socket =   a_socket
 
@@ -186,6 +191,11 @@ class PacketMngr:
                 self.new_img_rec = False
                 print("displaying new img")
                 try:
+                    if self.fps_start_tick == 0:
+                        self.fps_start_tick = self.frame_sys_tick
+                    else:
+                        self.fps_curr = self.fps_curr+1
+
                     img = plt.imread(self.last_saved_cropped_img_path)
                     if img_plt is None:
                         img_plt = plt.imshow(img)
@@ -194,8 +204,14 @@ class PacketMngr:
                         img_plt.set_data(img)
                         dt = (self.curr_img_tick-self.first_img_tick)
                         if dt != 0:
-                            s = 'Average%.3f[fps]' %(self.frame_ctr*1000/dt)
+                            s = 'avg fps = %.3f[fps], curr fps = %d[fps]' %((self.frame_ctr*1000/dt), self.fps_last)
                             text.set_text(s)
+
+                    if self.frame_sys_tick - self.fps_start_tick >= 1000:
+                        self.fps_start_tick = self.frame_sys_tick
+                        self.fps_last = self.fps_curr
+                        self.fps_curr = 0
+
                     plt.pause(c.IMG_PLOT_PAUSE)  # needs to be less then 1/15fps
                     plt.draw()
                 except:
@@ -205,7 +221,7 @@ class PacketMngr:
                             img_plt = plt.imshow(img)
                         else:
                             img_plt.set_data(img)
-                    plt.pause(.001)  # needs to be less then 1/15fps
+                    plt.pause(c.IMG_PLOT_PAUSE)  # needs to be less then 1/15fps
                     plt.draw()
                     print("img show err")
 
