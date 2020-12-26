@@ -101,6 +101,7 @@ def main():
                         delta_tick = pm.frame_sys_tick - pm.last_valid_frame_sys_tick
                         print("sys_tick diff = %d [msec]" % delta_tick)
                         pm.last_valid_frame_sys_tick = pm.frame_sys_tick
+                        pm.last_img_tick = pm.curr_img_tick
                         pm.curr_img_tick = pm.frame_sys_tick
 
 
@@ -136,6 +137,7 @@ class PacketMngr:
         self.frame_rx_buff = bytes()
         self.frame_sys_tick = 0
         self.first_img_tick = 0.0
+        self.last_img_tick = 0.0
         self.curr_img_tick = 0.0
         self.last_valid_frame_sys_tick = 0
         self.frame_size =   0
@@ -162,12 +164,16 @@ class PacketMngr:
         self.acc_y = 0
         self.acc_z = 0
 
+        self.rel_time = 0
+
         self.fps_start_tick = 0
         self.fps_curr = 0
-        self.fps_last= 0
+        self.fps_last = 0
+
+        self.delay = 9999
 
     def add_socket(self, a_socket):
-        self.socket =   a_socket
+        self.socket = a_socket
 
     def save_jpeg(self, save_path):
         # prnt("image size =", 0)
@@ -193,8 +199,9 @@ class PacketMngr:
                 try:
                     if self.fps_start_tick == 0:
                         self.fps_start_tick = self.frame_sys_tick
+                        self.rel_time = time.time() * 1000 - self.fps_start_tick
                     else:
-                        self.fps_curr = self.fps_curr+1
+                        self.fps_curr = self.fps_curr + 1
 
                     img = plt.imread(self.last_saved_cropped_img_path)
                     if img_plt is None:
@@ -204,7 +211,7 @@ class PacketMngr:
                         img_plt.set_data(img)
                         dt = (self.curr_img_tick-self.first_img_tick)
                         if dt != 0:
-                            s = 'avg fps = %.3f[fps], curr fps = %d[fps]' %((self.frame_ctr*1000/dt), self.fps_last)
+                            s = 'avg fps = %.3f[fps], curr fps = %d[fps], dt = %d[msec]' %((self.frame_ctr*1000/dt), self.fps_last, self.curr_img_tick-self.last_img_tick)
                             text.set_text(s)
 
                     if self.frame_sys_tick - self.fps_start_tick >= 1000:

@@ -103,43 +103,43 @@ SD_MPU6050_Result SD_MPU6050_Init(SD_MPU6050_Device DeviceNumber, SD_MPU6050_Acc
 
 
 	/* Check if device is connected */
-	if(HAL_I2C_IsDeviceReady(pThis->m_pI2Cx,(uint16_t)pThis->Address,2,5)!=HAL_OK)
+	if(HAL_I2C_IsDeviceReady(pThis->m_pI2Cx,(uint16_t)pThis->Address,2, MPU6050_I2C_TIMEOUT_MSEC)!=HAL_OK)
 	{
-				return SD_MPU6050_Result_Error;
+		return SD_MPU6050_Result_Error;
 	}
 	/* Check who am I */
 	//------------------
-		/* Send address */
-		if(HAL_I2C_Master_Transmit(pThis->m_pI2Cx,(uint16_t)pThis->Address, &WHO_AM_I, 1, MPU6050_I2C_TIMEOUT_MSEC) != HAL_OK)
-		{
-			return SD_MPU6050_Result_Error;
-		}
+	/* Send address */
+	if(HAL_I2C_Master_Transmit(pThis->m_pI2Cx,(uint16_t)pThis->Address, &WHO_AM_I, 1, MPU6050_I2C_TIMEOUT_MSEC) != HAL_OK)
+	{
+		return SD_MPU6050_Result_Error;
+	}
 
-		/* Receive multiple byte */
-		if(HAL_I2C_Master_Receive(pThis->m_pI2Cx,(uint16_t)pThis->Address, &temp, 1, MPU6050_I2C_TIMEOUT_MSEC) != HAL_OK)
-		{
-			return SD_MPU6050_Result_Error;
-		}
+	/* Receive multiple byte */
+	if(HAL_I2C_Master_Receive(pThis->m_pI2Cx,(uint16_t)pThis->Address, &temp, 1, MPU6050_I2C_TIMEOUT_MSEC) != HAL_OK)
+	{
+		return SD_MPU6050_Result_Error;
+	}
 
-		/* Checking */
-		while(temp != MPU6050_I_AM)
-		{
-				/* Return error */
-				return SD_MPU6050_Result_DeviceInvalid;
-		}
+	/* Checking */
+	while(temp != MPU6050_I_AM)
+	{
+			/* Return error */
+			return SD_MPU6050_Result_DeviceInvalid;
+	}
 	//------------------
 
 	/* Wakeup MPU6050 */
 	//------------------
-		/* Format array to send */
-		d[0] = MPU6050_PWR_MGMT_1;
-		d[1] = 0x00;
+	/* Format array to send */
+	d[0] = MPU6050_PWR_MGMT_1;
+	d[1] = 0x00;
 
-		/* Try to transmit via I2C */
-		if(HAL_I2C_Master_Transmit(pThis->m_pI2Cx,(uint16_t)pThis->Address, (uint8_t *)d, 2, MPU6050_I2C_TIMEOUT_MSEC) != HAL_OK)
-		{
-					return SD_MPU6050_Result_Error;
-		}
+	/* Try to transmit via I2C */
+	if(HAL_I2C_Master_Transmit(pThis->m_pI2Cx,(uint16_t)pThis->Address, (uint8_t *)d, 2, MPU6050_I2C_TIMEOUT_MSEC) != HAL_OK)
+	{
+				return SD_MPU6050_Result_Error;
+	}
 	//------------------
 
 	/* Set sample rate to 1kHz */
@@ -318,7 +318,7 @@ SD_MPU6050_Result SD_MPU6050_ReadGyroscope(void)
 SD_MPU6050_Result SD_MPU6050_ReadAll(void)
 {
 	uint8_t data[14];
-	int16_t temp;
+//	int16_t temp;
 	uint8_t reg = MPU6050_ACCEL_XOUT_H;
 	SD_MPU6050* pThis 	= &g_mpu1;
 	SD_MPU6050_Result Result = SD_MPU6050_Result_Ok;
