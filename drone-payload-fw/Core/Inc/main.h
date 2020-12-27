@@ -47,7 +47,7 @@ extern "C" {
 
 /** Wi-Fi Settings */
 
-#define PROJ_SHA			"0xb77ebd6b5312cffe3c68f333ac0d836fb3d6b862"
+#define PROJ_SHA			"0x53a63a68b7373bf06e1bc09205d579fdcc81de3e"
 
 
 

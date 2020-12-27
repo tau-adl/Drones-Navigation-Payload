@@ -26,6 +26,7 @@ ubuntu - `minicom`, `screen` or similar
 
 - `camera_mngr.h` , frame size @  `FRAME_SIZE`,  `IMG_W`,  `IMG_H`
 - `camera_mngr.h` , debug flags @  `CAMERA_BENCHMARK` - for printing acquisitions benchmarks,  `SAVE_INPUT_IMG_ON_SD`,  `SAVE_OUTPUT_IMG_ON_SD` - to save source and ouput images in SD card (~use carefully, it affects timings!)
+- `main.h` - Wifi's SSID @ `MAIN_WLAN_SSID`
 
 
 ## Dependencies
