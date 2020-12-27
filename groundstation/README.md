@@ -19,6 +19,9 @@ This code handles data comes from the drones payload, manages sockect and commun
 * opencv
 * libopencv
 
+if you use `ROS`
+* ROS
+
 
 ## Contributors
 @Shenhavo

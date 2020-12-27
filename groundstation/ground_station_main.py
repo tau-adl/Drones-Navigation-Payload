@@ -1,16 +1,26 @@
+USING_ROS = False
 
 import socket
 from datetime import datetime
 import os
-import subprocess
+
 import time
 import csv
 from utils import *
-import cv2
-import threading
 import constants as c
-import matplotlib.pyplot as plt
 
+try:
+    if USING_ROS:
+        import rospy
+        import sensor_msgs
+        # from sensor_msgs.msg import Image, CompressedImage, Imu
+    else:
+        import cv2
+        import threading
+        import subprocess
+        import matplotlib.pyplot as plt
+except Exception:
+    raise
 
 def main():
     now = datetime.now()
@@ -23,7 +33,7 @@ def main():
         os.mkdir(path)
 
     except OSError:
-        print ("trying to create outputs directory")
+        print("trying to create outputs directory")
         try:
             os.mkdir("outputs")
             os.mkdir(path)
@@ -58,13 +68,14 @@ def main():
 
         s.sendall(c.TARGET_START_SEND_CMD)
 
-        display_img_thread = threading.Thread(target=pm.display_img)
-        display_img_thread.setDaemon(True)
-        display_img_thread.start()
+        if not USING_ROS:
+            display_img_thread = threading.Thread(target=pm.display_img)
+            display_img_thread.setDaemon(True)
+            display_img_thread.start()
 
         while True:
             incoming_data = s.recv(c.SOF_SIZE_B)
-            print("SOF="+str(incoming_data))
+            print("sof="+str(incoming_data))
             if incoming_data[0] == c.FRAME_SOF:
                 incoming_data = s.recv(c.FRAME_HEADER_WO_SOF_SIZE_B)
                 incoming_sys_tick = FourBytesToUint32(incoming_data, 0)
@@ -86,6 +97,12 @@ def main():
                 else: # means this is the last packet
                     try:
                         pm.frame_rx_buff = pm.frame_rx_buff + s.recv(pm.frame_size)# - FRAME_HEADER_SIZE_B)
+                        if USING_ROS:
+                            Image_msg = CompressedImage()
+                            Image_msg.header.stamp = rospy.Time.now()
+                            Image_msg.format = "jpeg"
+                            Image_msg.data = pm.frame_rx_buff
+                            pub_image.publish(Image_msg)
                     except:
                         expected_frame_size = pm.frame_size - c.FRAME_HEADER_SIZE_B
                         print("bad recv size: %d" % expected_frame_size)
@@ -130,8 +147,8 @@ def main():
 class PacketMngr:
 
     def __init__(self, a_host, a_port):
-        self.host   = a_host
-        self.port   = a_port
+        self.host = a_host
+        self.port = a_port
         self.socket = None
         self.rx_bytes_to_read = 1
         self.frame_rx_buff = bytes()
@@ -232,22 +249,6 @@ class PacketMngr:
                     plt.draw()
                     print("img show err")
 
-    # def display_imu(self):
-    #     imu_plt = None
-    #     while True:
-    #         if self.new_imu_rec:
-    #             self.new_imu_rec = False
-    #             print("displaying new imu")
-    #             try:
-    #                 if imu_plt is None:
-    #                     imu_plt = plt.plot(0, 0)
-    #                 else:
-    #                     imu_plt.set_data(np.linspace(0, len(self.acc_x)), self.acc_x)
-    #                 plt.pause(.067) # ~15fps
-    #                 plt.draw()
-    #             except:
-    #                 print("imu show err")
-
     def crop_img(self, img_path):
         try:
             img = cv2.imread(img_path)
@@ -267,7 +268,7 @@ class PacketMngr:
         self.frame_size =   0
         self.expected_num_of_packets = 0
         self.ptr_jpeg   = None
-        self.mode       =   0 # 0 = off, 1 = Image, 2 = IMU
+        self.mode = 0 # 0 = off, 1 = Image, 2 = IMU
         self.frame_rx_buff = bytes(0)
 
     def clear_imu_properties(self):
@@ -291,6 +292,17 @@ class PacketMngr:
             self.acc_y = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_Y_SHIFT) / c.ACC_BITS_TO_FLOAT
             self.acc_z = TwoBytesToInt16(a_byte_arr,c.IMU_DATA_SHIFT_SIZE_B + imu_call_idx * c.IMU_CALL_SIZE_B + c.ACC_Z_SHIFT) / c.ACC_BITS_TO_FLOAT
             self.csvmngr.appendImuData([self.imu_sys_tick-c.IMU_CALLS_TIME_Delta_MSEC*(c.IMU_CALLS_PER_PACKET-1-imu_call_idx),self.gyro_x,self.gyro_y,self.gyro_z,self.acc_x,self.acc_y,self.acc_z])
+
+            if USING_ROS:
+                curr_timestamp = self.imu_sys_tick - c.IMU_CALLS_TIME_Delta_MSEC * (
+                            c.IMU_CALLS_PER_PACKET - 1 - imu_call_idx)  # TODO: insert curr timestamp in IMU_msg
+                IMU_msg.angular_velocity.x = self.gyro_x
+                IMU_msg.angular_velocity.y = self.gyro_y
+                IMU_msg.angular_velocity.z = self.gyro_z
+                IMU_msg.linear_acceleration.x = self.acc_x
+                IMU_msg.linear_acceleration.y = self.acc_y
+                IMU_msg.linear_acceleration.z = self.acc_z
+                pub_imu.publish(IMU_msg)
 
     def print_imu_data(self):
         prnt(("Gyro X = " + str(self.gyro_x)), 0)
@@ -322,14 +334,20 @@ class CsvMngr:
     def __init__(self, a_path):
         self.path = a_path
         self.list = []
-        with open(self.path + '/imu.csv','w', newline='') as file:
+        with open(self.path + '/imu.csv', 'w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["TimeStamp","GyroX", "GyroY", "GyroZ","AccX", "AccY", "AccZ"])
+            writer.writerow(["TimeStamp", "GyroX", "GyroY", "GyroZ","AccX", "AccY", "AccZ"])
     def appendImuData(self,a_list):
-        with open(self.path + '/imu.csv','a', newline='') as file:
+        with open(self.path + '/imu.csv', 'a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(a_list)
+
 if __name__ == "__main__":
+    if USING_ROS:
+        rospy.init_node('ground_station_node')
+        # pub = rospy.Publisher('/comp_image', CompressedImage, queue_size=1)
+        pub_image = rospy.Publisher("/output/image_raw/compressed", CompressedImage)
+        pub_imu = rospy.Publisher("/imu", Imu)
     main()
 
 

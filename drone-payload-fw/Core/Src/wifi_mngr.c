@@ -6,6 +6,7 @@
 /* Define to prevent recursive inclusion -------------------------------------*/
 #include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include "main.h"
 #include "led.h"
 #include "driver/include/m2m_types.h"

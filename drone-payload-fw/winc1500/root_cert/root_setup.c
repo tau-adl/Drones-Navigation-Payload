@@ -39,7 +39,7 @@
  *
  */
 #include <stdio.h>
-#include "x509/x509_cert.h"
+#include "X509/x509_cert.h"
 #include "root_setup.h"
 #include "programmer/programmer_apis.h"
 
